@@ -1,0 +1,9 @@
+<resources>
+    <!-- Tradução opcional para português (Brasil) das strings da Fig. 6.4 -->
+    <string name="app_name">Cannon Game</string>
+    <string name="results_format">Disparos: %1$d\nTempo total: %2$.1f</string>
+    <string name="reset_game">Novo jogo</string>
+    <string name="win">Você venceu!</string>
+    <string name="lose">Você perdeu!</string>
+    <string name="time_remaining_format">Tempo restante: %.1f segundos</string>
+</resources>
