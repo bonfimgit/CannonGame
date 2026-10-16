@@ -2,7 +2,9 @@
 
 Implementação completa do app **Cannon Game** do Capítulo 6 do livro *Android 6 for Programmers: An App-Driven Approach* (3ª edição, Deitel), feita em Java no Android Studio.
 
-> **Integrantes do grupo:** _(preencher)_
+> **Integrantes do grupo:**
+> - João Victor Silva Bonfim Santos
+> - Eduardo de Oliveira Santana
 
 ## O jogo
 
@@ -72,3 +74,4 @@ O código segue as figuras do capítulo. As mudanças abaixo foram necessárias 
 - **Proteções contra falhas:** verificação de `canvas == null` no loop do jogo, de `cannonThread == null` em `surfaceDestroyed` e de `soundPool == null` em `playSound`/`releaseResources`. A flag `threadIsRunning` agora é `volatile`, já que é escrita por uma thread e lida por outra.
 - **Sons.** Os arquivos `.wav` dos exemplos do livro não vêm junto com o texto, então os três sons foram sintetizados para este projeto, com os mesmos nomes usados no capítulo.
 - **Tradução.** Os textos originais (em inglês) estão em `values/strings.xml`. Há uma tradução opcional em `values-pt-rBR/`, usada automaticamente em aparelhos configurados em português.
+- **Dependências do Kotlin.** O projeto é só em Java, então o Gradle não alinha sozinho as versões do `kotlin-stdlib` que as bibliotecas AndroidX puxam, e o build falhava com "Duplicate class". Adicionamos `implementation(platform("org.jetbrains.kotlin:kotlin-bom:1.8.22"))` em `app/build.gradle.kts` para usar uma única versão.
