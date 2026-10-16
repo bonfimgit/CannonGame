@@ -310,7 +310,49 @@ public class CannonView extends SurfaceView
          target.draw(canvas);
    }
 
-   // >>> PARTE 2: método testForCollisions (passo 4)
+   // Este método verifica se a bala bateu em alguma coisa.
+   // Ele é chamado a cada quadro do jogo (várias vezes por segundo).
+   // Se a bala bater em um alvo: o alvo some e o jogador ganha tempo.
+   // Se a bala bater no bloqueador: a bala volta e o jogador perde tempo.
+   public void testForCollisions() {
+      // Primeiro confere se existe uma bala voando na tela.
+      if (cannon.getCannonball() != null &&
+              cannon.getCannonball().isOnScreen()) {
+         // Passa por todos os alvos, um por um, para ver
+         // se a bala encostou em algum deles.
+         for (int n = 0; n < targets.size(); n++) {
+            if (cannon.getCannonball().collidesWith(targets.get(n))) {
+               // A bala acertou o alvo número n!
+               targets.get(n).playSound(); // toca o som de alvo atingido
+
+               // Dá ao jogador os segundos de recompensa (3 s).
+               timeLeft += targets.get(n).getHitReward();
+
+               cannon.removeCannonball(); // a bala some do jogo
+               targets.remove(n); // o alvo atingido some da lista
+               --n; // ajusta o contador, porque a lista diminuiu
+               break; // a bala já sumiu, então para de procurar
+            }
+         }
+      }
+      else {
+         // Se a bala já saiu da tela, ela é apagada do jogo,
+         // liberando o canhão para atirar de novo.
+         cannon.removeCannonball();
+      }
+
+      // Agora confere se a bala (se ainda existir) bateu no bloqueador.
+      if (cannon.getCannonball() != null &&
+              cannon.getCannonball().collidesWith(blocker)) {
+         blocker.playSound(); // toca o som de batida no bloqueador
+
+         // Inverte a direção da bala: ela volta para o lado do canhão.
+         cannon.getCannonball().reverseVelocityX();
+
+         // Tira do jogador os segundos de penalidade (2 s).
+         timeLeft -= blocker.getMissPenalty();
+      }
+   }
 
    // para o jogo: chamado pelo método onPause do MainActivityFragment
    public void stopGame() {
@@ -425,7 +467,8 @@ public class CannonView extends SurfaceView
                   double elapsedTimeMS = currentTime - previousFrameTime;
                   totalElapsedTime += elapsedTimeMS / 1000.0;
                   updatePositions(elapsedTimeMS); // atualiza o estado do jogo
-                  // >>> PARTE 2: chamar testForCollisions no loop do jogo (passo 5)
+                  // Verifica se a bala bateu em algum alvo ou no bloqueador.
+                  testForCollisions();
                   drawGameElements(canvas); // desenha usando o canvas
                   previousFrameTime = currentTime; // atualiza o tempo anterior
                }
