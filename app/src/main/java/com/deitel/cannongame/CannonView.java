@@ -1,9 +1,12 @@
 // CannonView.java
-// Exibe e controla o Cannon Game
+// Exibe e controla o Cannon Game (Figs. 6.19 a 6.34)
 package com.deitel.cannongame;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -11,6 +14,7 @@ import android.graphics.Point;
 import android.media.AudioAttributes;
 import android.media.SoundPool;
 import android.os.Build;
+import android.os.Bundle;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.util.SparseIntArray;
@@ -18,6 +22,10 @@ import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
+
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.fragment.app.DialogFragment;
+import androidx.fragment.app.FragmentManager;
 
 import java.util.ArrayList;
 import java.util.Random;
@@ -240,51 +248,86 @@ public class CannonView extends SurfaceView
          timeLeft = 0.0;
          gameOver = true; // o jogo terminou
          cannonThread.setRunning(false); // encerra a thread
-         // >>> PARTE 2: mostrar o diálogo de derrota (passo 2)
+         showGameOverDialog(R.string.lose); // tempo esgotado: derrota
       }
 
       // se todos os alvos foram atingidos
       if (targets.isEmpty()) {
          cannonThread.setRunning(false); // encerra a thread
-         // >>> PARTE 2: mostrar o diálogo de vitória (passo 2)
+         showGameOverDialog(R.string.win); // todos os alvos destruídos: vitória
          gameOver = true;
       }
    }
 
-   // Este método é chamado sempre que o jogador toca na tela.
-   // Ele faz duas coisas: vira o cano do canhão na direção do toque
-   // e dispara uma bala (se não houver outra bala voando).
+   // mira o cano na direção do toque e dispara uma bala,
+   // desde que não exista outra bala na tela
    public void alignAndFireCannonball(MotionEvent event) {
-      // Pega a posição (x, y) onde o dedo tocou na tela.
-      // x = distância da borda esquerda; y = distância do topo.
+      // ponto da tela onde o usuário tocou
       Point touchPoint = new Point((int) event.getX(),
               (int) event.getY());
 
-      // O canhão fica na borda esquerda, no meio da altura da tela.
-      // Aqui calculamos o quanto o toque está acima (positivo)
-      // ou abaixo (negativo) do canhão.
+      // o canhão fica na borda esquerda, no meio da altura da tela;
+      // centerMinusY é a distância vertical entre o canhão e o toque
+      // (positiva se o toque está acima do canhão, negativa se está abaixo)
       double centerMinusY = (screenHeight / 2 - touchPoint.y);
 
-      double angle = 0; // começa com o ângulo zerado
+      double angle = 0; // inicializa o ângulo como 0
 
-      // Calcula o ângulo para onde o cano deve apontar.
-      // Math.atan2 usa as duas distâncias (para o lado e para cima)
-      // e devolve o ângulo da linha que liga o canhão até o toque.
+      // atan2 recebe a distância horizontal (touchPoint.x) e a vertical
+      // (centerMinusY) e devolve o ângulo, em radianos, da reta que liga
+      // o canhão ao toque. Neste jogo, 0 aponta para cima e PI/2 aponta
+      // para a direita, por isso x vem como primeiro argumento.
       angle = Math.atan2(touchPoint.x, centerMinusY);
 
-      // Gira o cano do canhão para esse ângulo.
-      cannon.align(angle);
+      cannon.align(angle); // gira o cano para o ângulo calculado
 
-      // Só deixa atirar se não existir bala ou se a bala anterior
-      // já saiu da tela. Assim, só existe uma bala por vez.
+      // só permite um disparo se não houver bala ou se a anterior
+      // já saiu da tela (no máximo uma bala por vez)
       if (cannon.getCannonball() == null ||
               !cannon.getCannonball().isOnScreen()) {
          cannon.fireCannonball(); // cria a bala e toca o som do tiro
-         ++shotsFired; // conta mais um disparo (aparece no fim do jogo)
+         ++shotsFired;
       }
    }
 
-   // >>> PARTE 2: métodos showGameOverDialog e resetGameFromDialog (passo 3)
+   // exibe o diálogo de fim de jogo com o resultado, o número de
+   // disparos e o tempo total da partida
+   private void showGameOverDialog(final int messageId) {
+      // O livro cria o DialogFragment como classe anônima. A partir do
+      // Android 8.0, o FragmentManager exige uma classe pública e estática
+      // (senão lança IllegalStateException e o app fecha), por isso usamos
+      // GameResultDialogFragment, que recebe os dados da partida.
+      final DialogFragment gameResult = GameResultDialogFragment.newInstance(
+              messageId, shotsFired, totalElapsedTime);
+
+      // Este método é chamado pela CannonThread, mas no Android só a
+      // thread principal (UI thread) pode alterar a interface. Por isso
+      // o diálogo é exibido dentro de runOnUiThread.
+      activity.runOnUiThread(
+              new Runnable() {
+                 public void run() {
+                    FragmentManager fragmentManager =
+                            ((AppCompatActivity) activity).getSupportFragmentManager();
+
+                    // se a Activity já salvou seu estado (app sendo pausado
+                    // ou fechado), exibir o diálogo causaria uma exceção
+                    if (fragmentManager.isStateSaved())
+                       return;
+
+                    showSystemBars(); // sai do modo imersivo
+                    dialogIsDisplayed = true;
+                    gameResult.setCancelable(false); // fecha só pelo botão
+                    gameResult.show(fragmentManager, "results");
+                 }
+              }
+      );
+   }
+
+   // chamado pelo botão "Reset Game" do diálogo: começa um novo jogo
+   void resetGameFromDialog() {
+      dialogIsDisplayed = false;
+      newGame();
+   }
 
    // desenha o jogo no Canvas informado
    public void drawGameElements(Canvas canvas) {
@@ -310,46 +353,42 @@ public class CannonView extends SurfaceView
          target.draw(canvas);
    }
 
-   // Este método verifica se a bala bateu em alguma coisa.
-   // Ele é chamado a cada quadro do jogo (várias vezes por segundo).
-   // Se a bala bater em um alvo: o alvo some e o jogador ganha tempo.
-   // Se a bala bater no bloqueador: a bala volta e o jogador perde tempo.
+   // Verifica, a cada quadro do game loop, se a bala colidiu com algum
+   // alvo ou com o bloqueador.
+   // - alvo atingido: o alvo é removido e o jogador ganha HIT_REWARD segundos
+   // - bloqueador atingido: a bala volta e o jogador perde MISS_PENALTY segundos
    public void testForCollisions() {
-      // Primeiro confere se existe uma bala voando na tela.
+      // testa os alvos apenas se houver uma bala na tela
       if (cannon.getCannonball() != null &&
               cannon.getCannonball().isOnScreen()) {
-         // Passa por todos os alvos, um por um, para ver
-         // se a bala encostou em algum deles.
          for (int n = 0; n < targets.size(); n++) {
             if (cannon.getCannonball().collidesWith(targets.get(n))) {
-               // A bala acertou o alvo número n!
-               targets.get(n).playSound(); // toca o som de alvo atingido
+               targets.get(n).playSound(); // som de alvo atingido
 
-               // Dá ao jogador os segundos de recompensa (3 s).
+               // soma a recompensa ao tempo restante
                timeLeft += targets.get(n).getHitReward();
 
-               cannon.removeCannonball(); // a bala some do jogo
-               targets.remove(n); // o alvo atingido some da lista
-               --n; // ajusta o contador, porque a lista diminuiu
-               break; // a bala já sumiu, então para de procurar
+               cannon.removeCannonball(); // remove a bala do jogo
+               targets.remove(n); // remove o alvo atingido
+               --n; // a lista diminuiu, então o índice volta uma posição
+               break; // a bala já foi removida, não há mais o que testar
             }
          }
       }
       else {
-         // Se a bala já saiu da tela, ela é apagada do jogo,
-         // liberando o canhão para atirar de novo.
+         // a bala saiu da tela: remove para liberar um novo disparo
          cannon.removeCannonball();
       }
 
-      // Agora confere se a bala (se ainda existir) bateu no bloqueador.
+      // verifica se a bala (se ainda existir) colidiu com o bloqueador
       if (cannon.getCannonball() != null &&
               cannon.getCannonball().collidesWith(blocker)) {
-         blocker.playSound(); // toca o som de batida no bloqueador
+         blocker.playSound(); // som de bloqueador atingido
 
-         // Inverte a direção da bala: ela volta para o lado do canhão.
+         // inverte a velocidade horizontal: a bala volta em direção ao canhão
          cannon.getCannonball().reverseVelocityX();
 
-         // Tira do jogador os segundos de penalidade (2 s).
+         // desconta a penalidade do tempo restante
          timeLeft -= blocker.getMissPenalty();
       }
    }
@@ -405,29 +444,21 @@ public class CannonView extends SurfaceView
       }
    }
 
-   // Este método é chamado automaticamente pelo Android sempre que
-   // o jogador toca na tela (no emulador, o clique do mouse vale como toque).
-   // Ele verifica que tipo de toque foi e, se for o caso, manda o canhão
-   // mirar e atirar.
+   // chamado pelo Android quando o usuário toca a tela
+   // (no emulador, o clique do mouse conta como toque)
    @Override
    public boolean onTouchEvent(MotionEvent e) {
-      // Descobre qual foi o tipo de toque: dedo encostando,
-      // dedo arrastando, dedo saindo da tela etc.
-      int action = e.getAction();
+      int action = e.getAction(); // tipo de evento de toque
 
-      // ACTION_DOWN = o dedo acabou de encostar na tela.
-      // ACTION_MOVE = o dedo está arrastando pela tela.
-      // Nos dois casos, o canhão deve mirar e tentar atirar.
+      // ACTION_DOWN: o dedo encostou na tela
+      // ACTION_MOVE: o dedo está sendo arrastado
+      // nos dois casos o canhão mira e tenta disparar
       if (action == MotionEvent.ACTION_DOWN ||
               action == MotionEvent.ACTION_MOVE) {
-         // Chama o método do passo 3, que gira o cano
-         // na direção do toque e dispara a bala.
          alignAndFireCannonball(e);
       }
 
-      // Retornar true avisa o Android que este toque já foi tratado aqui,
-      // então ele não precisa repassar o toque para outro lugar.
-      return true;
+      return true; // indica que o evento de toque foi tratado aqui
    }
 
    // subclasse de Thread que controla o loop do jogo
@@ -466,9 +497,11 @@ public class CannonView extends SurfaceView
                   long currentTime = System.currentTimeMillis();
                   double elapsedTimeMS = currentTime - previousFrameTime;
                   totalElapsedTime += elapsedTimeMS / 1000.0;
+
+                  // a cada quadro: move os elementos, testa as colisões
+                  // e desenha o resultado na tela
                   updatePositions(elapsedTimeMS); // atualiza o estado do jogo
-                  // Verifica se a bala bateu em algum alvo ou no bloqueador.
-                  testForCollisions();
+                  testForCollisions(); // testa colisões entre GameElements
                   drawGameElements(canvas); // desenha usando o canvas
                   previousFrameTime = currentTime; // atualiza o tempo anterior
                }
@@ -507,5 +540,63 @@ public class CannonView extends SurfaceView
                          View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
    }
 
-   // >>> PARTE 2: classe GameResultDialogFragment (passo 7)
+   // DialogFragment que exibe o resultado do jogo (Fig. 6.27).
+   // Precisa ser public static para que o Android consiga recriá-lo
+   // sozinho, por exemplo depois que a Activity é recriada.
+   public static class GameResultDialogFragment extends DialogFragment {
+      // chaves usadas para guardar os dados da partida no Bundle
+      private static final String ARG_MESSAGE_ID = "messageId";
+      private static final String ARG_SHOTS_FIRED = "shotsFired";
+      private static final String ARG_TOTAL_TIME = "totalElapsedTime";
+
+      // Cria o diálogo com os dados da partida que terminou. Os dados vão
+      // em um Bundle (setArguments) porque o Android salva e restaura esses
+      // argumentos automaticamente quando recria o fragment.
+      public static GameResultDialogFragment newInstance(int messageId,
+                                                         int shotsFired, double totalElapsedTime) {
+         Bundle arguments = new Bundle();
+         arguments.putInt(ARG_MESSAGE_ID, messageId);
+         arguments.putInt(ARG_SHOTS_FIRED, shotsFired);
+         arguments.putDouble(ARG_TOTAL_TIME, totalElapsedTime);
+
+         GameResultDialogFragment dialog = new GameResultDialogFragment();
+         dialog.setArguments(arguments);
+         return dialog;
+      }
+
+      // cria o AlertDialog e o retorna
+      @Override
+      public Dialog onCreateDialog(Bundle bundle) {
+         // recupera os dados da partida guardados em newInstance
+         Bundle arguments = requireArguments();
+         int messageId = arguments.getInt(ARG_MESSAGE_ID);
+         int shotsFired = arguments.getInt(ARG_SHOTS_FIRED);
+         double totalElapsedTime = arguments.getDouble(ARG_TOTAL_TIME);
+
+         // título: "You win!" ou "You lose!" (String de recurso messageId)
+         AlertDialog.Builder builder =
+                 new AlertDialog.Builder(getActivity());
+         builder.setTitle(getResources().getString(messageId));
+
+         // mensagem: número de disparos e tempo total da partida
+         builder.setMessage(getResources().getString(
+                 R.string.results_format, shotsFired, totalElapsedTime));
+         builder.setPositiveButton(R.string.reset_game,
+                 new DialogInterface.OnClickListener() {
+                    // chamado quando o botão "Reset Game" é pressionado
+                    @Override
+                    public void onClick(DialogInterface dialog,
+                                        int which) {
+                       CannonView cannonView =
+                               requireActivity().findViewById(R.id.cannonView);
+                       if (cannonView != null)
+                          cannonView.resetGameFromDialog(); // novo jogo
+                    }
+                 }
+         );
+
+         return builder.create(); // retorna o AlertDialog
+      }
+   }
 }
+ 
